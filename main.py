@@ -31,7 +31,13 @@ SYSTEM_PROMPT = "You are a helpful assistant."
 # === API: Return available models (for Open WebUI) ===
 @app.get("/api/tags")
 async def get_models():
-    return {"models": ["chat-mistral", "ha-mistral"]}
+    return {
+        "models": [
+            {"model": "chat-mistral"},
+            {"model": "ha-mistral"}
+        ]
+    }
+
 
 # === API: Main Chat Endpoint (Open WebUI-compatible) ===
 @app.post("/api/generate")
