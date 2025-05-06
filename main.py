@@ -17,7 +17,11 @@ CHROMA_HOST = "http://chromadb.chromadb.svc.cluster.local:8000"
 # === Init embedding model and Chroma ===
 embedder = SentenceTransformer(EMBEDDING_MODEL)
 client = HttpClient(host=CHROMA_HOST)
-collection = client.get_or_create_collection(CHROMA_COLLECTION)
+try:
+   collection = client.get_or_create_collection(CHROMA_COLLECTION)
+except Exception as e:
+   raise RuntimeError(f"Failed to connect to ChromaDB: {str(e)}")
+
 
 SYSTEM_PROMPT = "You are a helpful assistant."
 
