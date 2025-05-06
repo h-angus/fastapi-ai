@@ -23,4 +23,4 @@ jobs:
       with:
         context: .
         push: true
-        tags: yourusername/fastapi-ai:latest
+        tags: angusbeef/fastapi-ai:latest
