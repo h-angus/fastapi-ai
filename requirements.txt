@@ -3,6 +3,4 @@ uvicorn
 sentence-transformers
 chromadb-client
 requests
-huggingface_hub
-hf_xet
-
+huggingface_hub[hf_xet]
