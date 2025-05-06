@@ -31,12 +31,13 @@ async def get_models():
 
 @app.get("/api/models")
 async def get_all_models():
-   return {
-      "models": [
-         {"name": "chat-mistral", "modified_at": "", "parameters": {}},
-         {"name": "ha-mistral", "modified_at": "", "parameters": {}}
-      ]
-   }
+    return {
+        "models": [
+            {"model": "chat-mistral"},
+            {"model": "ha-mistral"}
+        ]
+    }
+
 
 
 # === Chat endpoint ===
