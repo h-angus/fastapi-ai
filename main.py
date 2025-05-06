@@ -40,29 +40,30 @@ async def root():
 # === Required Ollama endpoints ===
 @app.get("/api/tags")
 async def get_models():
-   return [
-      {
-         "name": "chat-mistral",
-         "modelfile": "Modelfile",
-         "details": {
-            "format": "gguf",
-            "family": "mistral",
-            "parameter_size": "7B",
-            "quantization_level": "Q4_0"
+   return {
+      "models": [
+         {
+            "name": "chat-mistral",
+            "modelfile": "Modelfile",
+            "details": {
+               "format": "gguf",
+               "family": "mistral",
+               "parameter_size": "7B",
+               "quantization_level": "Q4_0"
+            }
+         },
+         {
+            "name": "ha-mistral",
+            "modelfile": "Modelfile",
+            "details": {
+               "format": "gguf",
+               "family": "mistral",
+               "parameter_size": "7B",
+               "quantization_level": "Q4_0"
+            }
          }
-      },
-      {
-         "name": "ha-mistral",
-         "modelfile": "Modelfile",
-         "details": {
-            "format": "gguf",
-            "family": "mistral",
-            "parameter_size": "7B",
-            "quantization_level": "Q4_0"
-         }
-      }
-   ]
-
+      ]
+   }
 
 @app.get("/api/models")
 async def get_all_models():
