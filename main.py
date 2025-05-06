@@ -18,17 +18,12 @@ CHROMA_COLLECTION = "chat-mistral"
 embedder = SentenceTransformer(EMBEDDING_MODEL)
 
 # === Init Chroma ===
-import chromadb.config
+from chromadb import HttpClient
 
-chroma_client_settings = chromadb.config.Settings(
-    chroma_api_impl="rest",
-    chroma_server_host="chromadb.chromadb.svc.cluster.local",
-    chroma_server_http_port=8000,
-)
-
-client = chromadb.Client(chroma_client_settings)
-
+CHROMA_HOST = "http://chromadb.chromadb.svc.cluster.local:8000"
+client = HttpClient(host=CHROMA_HOST)
 collection = client.get_or_create_collection(CHROMA_COLLECTION)
+
 
 # === System Prompt ===
 SYSTEM_PROMPT = "You are a helpful assistant."
