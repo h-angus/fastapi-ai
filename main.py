@@ -28,10 +28,13 @@ SYSTEM_PROMPT = "You are a helpful assistant."
 # === Models list (Open WebUI expects just a list) ===
 @app.get("/api/tags")
 async def get_models():
-    return [
-        {"model": "chat-mistral", "modelfile": "", "details": {}},
-        {"model": "ha-mistral", "modelfile": "", "details": {}}
-    ]
+    return {
+        "models": [
+            {"model": "chat-mistral", "modelfile": "", "details": {}},
+            {"model": "ha-mistral", "modelfile": "", "details": {}}
+        ]
+    }
+
 
 @app.get("/api/models")
 async def get_all_models():
