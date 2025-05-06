@@ -1,65 +1,62 @@
 from fastapi import FastAPI, Request
 from pydantic import BaseModel
-from typing import Optional
-import chromadb
+from typing import Optional, List
 import requests
+import os
 from sentence_transformers import SentenceTransformer
+from chromadb import HttpClient
 
 app = FastAPI()
 
 # === Config ===
-import os
-
 OLLAMA_HOST = os.environ.get("OLLAMA_HOST", "http://ollama:11434")
 EMBEDDING_MODEL = "all-MiniLM-L6-v2"
 CHROMA_COLLECTION = "chat-mistral"
+CHROMA_HOST = "http://chromadb:8000"
 
-# === Init embedding model ===
+# === Init embedding model and Chroma ===
 embedder = SentenceTransformer(EMBEDDING_MODEL)
-
-# === Init Chroma ===
-from chromadb import HttpClient
-
-CHROMA_HOST = "http://chromadb.chromadb.svc.cluster.local:8000"
 client = HttpClient(host=CHROMA_HOST)
 collection = client.get_or_create_collection(CHROMA_COLLECTION)
 
-
-# === System Prompt ===
 SYSTEM_PROMPT = "You are a helpful assistant."
 
-# === API: Return available models (for Open WebUI) ===
+# === Models list (Open WebUI expects just a list) ===
 @app.get("/api/tags")
 async def get_models():
-    return {
-        "models": [
-            {"model": "chat-mistral"},
-            {"model": "ha-mistral"}
-        ]
-    }
+    return [
+        {"model": "chat-mistral", "modelfile": "", "details": {}},
+        {"model": "ha-mistral", "modelfile": "", "details": {}}
+    ]
 
+# === Chat endpoint ===
+class GenerateRequest(BaseModel):
+    model: Optional[str] = "chat-mistral"
+    prompt: str
 
-# === API: Main Chat Endpoint (Open WebUI-compatible) ===
 @app.post("/api/generate")
-async def generate(request: Request):
-    data = await request.json()
-    model = data.get("model", "chat-mistral")
-    prompt = data.get("prompt", "")
-    user_id = "webui"  # You can expand this later to support multiple users
+async def generate(data: GenerateRequest):
+    user_id = "webui"
 
-    # Embed the current message
-    embedding = embedder.encode(prompt).tolist()
+    # Embed prompt
+    try:
+        embedding = embedder.encode(data.prompt).tolist()
+    except Exception as e:
+        return {"error": f"Embedding failed: {str(e)}"}
 
-    # Retrieve memory snippets from Chroma
-    results = collection.query(
-        query_embeddings=[embedding],
-        n_results=3,
-        where={"user_id": user_id}
-    )
-    memory_snippets = results.get("documents", [[]])[0]
+    # Query memory
+    try:
+        results = collection.query(
+            query_embeddings=[embedding],
+            n_results=3,
+            where={"user_id": user_id}
+        )
+        memory_snippets = results.get("documents", [[]])[0]
+    except Exception:
+        memory_snippets = []
+
     memory_block = "\n".join(f"- {m}" for m in memory_snippets)
 
-    # Build final prompt
     full_prompt = f"""
 {SYSTEM_PROMPT}
 
@@ -67,22 +64,32 @@ Relevant past entries:
 {memory_block}
 
 Current message:
-{prompt}
+{data.prompt}
 """
 
-    # Call Ollama to get a response
-    ollama_response = requests.post(
-        f"{OLLAMA_HOST}/api/generate",
-        json={"model": model, "prompt": full_prompt, "stream": False}
-    )
-    response_text = ollama_response.json().get("response")
+    # Call Ollama (or mimic)
+    try:
+        response = requests.post(
+            f"{OLLAMA_HOST}/api/generate",
+            json={"model": data.model, "prompt": full_prompt, "stream": False}
+        )
+        response.raise_for_status()
+        response_text = response.json().get("response", "No response returned.")
+    except Exception as e:
+        return {"error": f"Ollama call failed: {str(e)}"}
 
-    # Save message to Chroma
-    collection.add(
-        documents=[prompt],
-        embeddings=[embedding],
-        metadatas=[{"user_id": user_id}],
-        ids=[f"{user_id}_{hash(prompt)}"]
-    )
+    # Store interaction
+    try:
+        collection.add(
+            documents=[data.prompt],
+            embeddings=[embedding],
+            metadatas=[{"user_id": user_id}],
+            ids=[f"{user_id}_{hash(data.prompt)}"]
+        )
+    except Exception:
+        pass  # Do not fail on storage errors
 
-    return {"response": response_text}
+    return {
+        "response": response_text,
+        "done": True
+    }
