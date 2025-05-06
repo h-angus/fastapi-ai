@@ -1,0 +1,11 @@
+.git
+__pycache__/
+.venv/
+.cache/
+sentence_transformers/
+*.pt
+*.bin
+*.gguf
+*.db
+*.sqlite
+*.log
