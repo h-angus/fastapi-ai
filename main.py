@@ -3,19 +3,17 @@ from pydantic import BaseModel
 from typing import Optional, List
 import requests
 import os
-from sentence_transformers import SentenceTransformer
 from chromadb import HttpClient
 
 app = FastAPI()
 
 # === Config ===
 OLLAMA_HOST = os.environ.get("OLLAMA_HOST", "http://ollama:11434")
-EMBEDDING_MODEL = "all-MiniLM-L6-v2"
+EMBEDDING_HOST = os.environ.get("EMBEDDING_HOST", "http://embedder-service:8001")
 CHROMA_COLLECTION = "chat-mistral"
 CHROMA_HOST = "http://chromadb.chromadb.svc.cluster.local:8000"
 
-# === Init embedding model and Chroma ===
-embedder = SentenceTransformer(EMBEDDING_MODEL)
+# === Init Chroma ===
 client = HttpClient(host=CHROMA_HOST)
 try:
    collection = client.get_or_create_collection(CHROMA_COLLECTION)
@@ -95,6 +93,15 @@ class GenerateRequest(BaseModel):
    model: Optional[str] = "chat-mistral"
    prompt: str
 
+def get_embeddings(texts: List[str]) -> List[List[float]]:
+   try:
+      response = requests.post(f"{EMBEDDING_HOST}/embed", json={"texts": texts}, timeout=10)
+      response.raise_for_status()
+      return response.json().get("embeddings", [])
+   except Exception as e:
+      print(f"Embedding service error: {e}")
+      return []
+
 @app.post("/api/generate")
 async def generate(data: GenerateRequest):
    user_id = "webui"
@@ -104,7 +111,10 @@ async def generate(data: GenerateRequest):
 
    # Embed prompt
    try:
-      embedding = embedder.encode(data.prompt).tolist()
+      embedding_list = get_embeddings([data.prompt])
+      if not embedding_list:
+         raise ValueError("Empty embedding returned.")
+      embedding = embedding_list[0]
    except Exception as e:
       return {"error": f"Embedding failed: {str(e)}"}
 
