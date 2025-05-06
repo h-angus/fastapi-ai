@@ -44,6 +44,7 @@ async def get_models():
       "models": [
          {
             "name": "chat-mistral",
+            "model": "chat-mistral",  # ✅ required now
             "modelfile": "Modelfile",
             "details": {
                "format": "gguf",
@@ -54,6 +55,7 @@ async def get_models():
          },
          {
             "name": "ha-mistral",
+            "model": "ha-mistral",  # ✅ required now
             "modelfile": "Modelfile",
             "details": {
                "format": "gguf",
@@ -64,6 +66,7 @@ async def get_models():
          }
       ]
    }
+
 
 @app.get("/api/models")
 async def get_all_models():
