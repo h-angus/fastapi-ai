@@ -22,60 +22,106 @@ try:
 except Exception as e:
    raise RuntimeError(f"Failed to connect to ChromaDB: {str(e)}")
 
-
 SYSTEM_PROMPT = "You are a helpful assistant."
 
-# === Models list (Open WebUI expects just a list) ===
+# === Health check ===
+@app.get("/")
+async def root():
+   return {"status": "ok"}
+
+# === Required Ollama endpoints ===
 @app.get("/api/tags")
 async def get_models():
-    return {
-        "models": [
-            {"model": "chat-mistral", "modelfile": "", "details": {}},
-            {"model": "ha-mistral", "modelfile": "", "details": {}}
-        ]
-    }
-
+   return {
+      "models": [
+         {
+            "model": "chat-mistral",
+            "modelfile": "Modelfile",
+            "details": {
+               "format": "gguf",
+               "family": "mistral",
+               "parameter_size": "7B",
+               "quantization_level": "Q4_0"
+            }
+         },
+         {
+            "model": "ha-mistral",
+            "modelfile": "Modelfile",
+            "details": {
+               "format": "gguf",
+               "family": "mistral",
+               "parameter_size": "7B",
+               "quantization_level": "Q4_0"
+            }
+         }
+      ]
+   }
 
 @app.get("/api/models")
 async def get_all_models():
-    return {
-        "models": [
-            {"model": "chat-mistral"},
-            {"model": "ha-mistral"}
-        ]
-    }
+   return {
+      "models": [
+         {
+            "name": "chat-mistral",
+            "model": "chat-mistral",
+            "modified_at": "2024-01-01T00:00:00.000Z",
+            "parameters": {},
+            "template": ""
+         },
+         {
+            "name": "ha-mistral",
+            "model": "ha-mistral",
+            "modified_at": "2024-01-01T00:00:00.000Z",
+            "parameters": {},
+            "template": ""
+         }
+      ]
+   }
 
+@app.get("/api/show")
+async def show_model():
+   return {}
 
+@app.post("/api/pull")
+async def pull_model():
+   return {"status": "success"}
+
+@app.post("/api/delete")
+async def delete_model():
+   return {"status": "success"}
 
 # === Chat endpoint ===
 class GenerateRequest(BaseModel):
-    model: Optional[str] = "chat-mistral"
-    prompt: str
+   model: Optional[str] = "chat-mistral"
+   prompt: str
 
 @app.post("/api/generate")
 async def generate(data: GenerateRequest):
-    user_id = "webui"
+   user_id = "webui"
 
-    # Embed prompt
-    try:
-        embedding = embedder.encode(data.prompt).tolist()
-    except Exception as e:
-        return {"error": f"Embedding failed: {str(e)}"}
+   if not data.prompt or not data.prompt.strip():
+      return {"error": "Prompt cannot be empty."}
 
-    # Query memory
-    try:
-        results = collection.query(
-            query_embeddings=[embedding],
-            n_results=3,
-            where={"user_id": user_id}
-        )
-        memory_snippets = results.get("documents", [[]])[0]
-    except Exception:
-        memory_snippets = []
+   # Embed prompt
+   try:
+      embedding = embedder.encode(data.prompt).tolist()
+   except Exception as e:
+      return {"error": f"Embedding failed: {str(e)}"}
 
-    memory_block = "\n".join(f"- {m}" for m in memory_snippets)
+   # Query memory
+   try:
+      results = collection.query(
+         query_embeddings=[embedding],
+         n_results=3,
+         where={"user_id": user_id}
+      )
+      memory_snippets = results.get("documents", [[]])[0]
+   except Exception:
+      memory_snippets = []
 
-    full_prompt = f"""
+   memory_block = "\n".join(f"- {m}" for m in memory_snippets)
+
+   full_prompt = f"""
 {SYSTEM_PROMPT}
 
 Relevant past entries:
@@ -85,29 +131,29 @@ Current message:
 {data.prompt}
 """
 
-    # Call Ollama (or mimic)
-    try:
-        response = requests.post(
-            f"{OLLAMA_HOST}/api/generate",
-            json={"model": data.model, "prompt": full_prompt, "stream": False}
-        )
-        response.raise_for_status()
-        response_text = response.json().get("response", "No response returned.")
-    except Exception as e:
-        return {"error": f"Ollama call failed: {str(e)}"}
+   # Call Ollama (or mimic)
+   try:
+      response = requests.post(
+         f"{OLLAMA_HOST}/api/generate",
+         json={"model": data.model, "prompt": full_prompt, "stream": False}
+      )
+      response.raise_for_status()
+      response_text = response.json().get("response", "No response returned.")
+   except Exception as e:
+      return {"error": f"Ollama call failed: {str(e)}"}
 
-    # Store interaction
-    try:
-        collection.add(
-            documents=[data.prompt],
-            embeddings=[embedding],
-            metadatas=[{"user_id": user_id}],
-            ids=[f"{user_id}_{hash(data.prompt)}"]
-        )
-    except Exception:
-        pass  # Do not fail on storage errors
+   # Store interaction
+   try:
+      collection.add(
+         documents=[data.prompt],
+         embeddings=[embedding],
+         metadatas=[{"user_id": user_id}],
+         ids=[f"{user_id}_{hash(data.prompt)}"]
+      )
+   except Exception:
+      pass
 
-    return {
-        "response": response_text,
-        "done": True
-    }
+   return {
+      "response": response_text,
+      "done": True
+   }
