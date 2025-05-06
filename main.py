@@ -44,7 +44,8 @@ async def get_models():
       "models": [
          {
             "name": "chat-mistral",
-            "model": "chat-mistral",  # ✅ required now
+            "model": "chat-mistral",
+            "version": "0.1.31",  # 👈 REQUIRED to fix KeyError
             "modelfile": "Modelfile",
             "details": {
                "format": "gguf",
@@ -55,7 +56,8 @@ async def get_models():
          },
          {
             "name": "ha-mistral",
-            "model": "ha-mistral",  # ✅ required now
+            "model": "ha-mistral",
+            "version": "0.1.31",  # 👈 Add here too
             "modelfile": "Modelfile",
             "details": {
                "format": "gguf",
@@ -66,6 +68,7 @@ async def get_models():
          }
       ]
    }
+
 
 
 @app.get("/api/models")
@@ -75,6 +78,7 @@ async def get_all_models():
          {
             "name": "chat-mistral",
             "model": "chat-mistral",
+            "version": "0.1.31",  # ✅ Required
             "modified_at": "2024-01-01T00:00:00.000Z",
             "parameters": {},
             "template": ""
@@ -82,12 +86,14 @@ async def get_all_models():
          {
             "name": "ha-mistral",
             "model": "ha-mistral",
+            "version": "0.1.31",  # ✅ Required
             "modified_at": "2024-01-01T00:00:00.000Z",
             "parameters": {},
             "template": ""
          }
       ]
    }
+
 
 @app.get("/api/show")
 async def show_model():
