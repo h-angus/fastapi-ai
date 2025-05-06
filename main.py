@@ -101,6 +101,20 @@ async def pull_model():
 async def delete_model():
    return {"status": "success"}
 
+@app.get("/ollama/api/version")
+async def get_ollama_version():
+   # Option 1 — Mock
+   return {"version": "0.1.31"}
+
+   # Option 2 — Proxy to real Ollama (if you prefer)
+   # try:
+   #    r = requests.get(f"{OLLAMA_HOST}/api/version", timeout=5)
+   #    r.raise_for_status()
+   #    return r.json()
+   # except Exception as e:
+   #    return {"error": f"Version check failed: {str(e)}"}
+
+
 # === Chat endpoint ===
 class GenerateRequest(BaseModel):
    model: Optional[str] = "chat-mistral"
