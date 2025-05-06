@@ -14,4 +14,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends build-essential
 
 COPY . .
 
+# DEBUG: List all files and their sizes (top 50 biggest)
+RUN apt-get update && apt-get install -y --no-install-recommends tree && \
+    echo "=== FILE SIZE DEBUG ===" && \
+    du -ah /app | sort -rh | head -n 50 && \
+    echo "=== END DEBUG ==="
+
+
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "2"]
