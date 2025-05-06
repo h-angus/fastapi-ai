@@ -1,3 +1,4 @@
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi import FastAPI, Request
 from pydantic import BaseModel
 from typing import Optional, List
@@ -6,6 +7,15 @@ import os
 from chromadb import HttpClient
 
 app = FastAPI()
+
+app.add_middleware(
+   CORSMiddleware,
+   allow_origins=["*"],  # Or specify your frontend domains
+   allow_credentials=True,
+   allow_methods=["*"],
+   allow_headers=["*"],
+)
+
 
 # === Config ===
 OLLAMA_HOST = os.environ.get("OLLAMA_HOST", "http://ollama:11434")
