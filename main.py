@@ -8,7 +8,7 @@ from sentence_transformers import SentenceTransformer
 app = FastAPI()
 
 # === Config ===
-OLLAMA_HOST = "http://ollama:11434"  # Replace with actual IP if needed
+OLLAMA_HOST = "http://ollama:11434"  # Replace with actual IP if neede
 EMBEDDING_MODEL = "all-MiniLM-L6-v2"
 CHROMA_COLLECTION = "chat-mistral"
 
