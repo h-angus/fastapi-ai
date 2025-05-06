@@ -16,7 +16,16 @@ CHROMA_COLLECTION = "chat-mistral"
 embedder = SentenceTransformer(EMBEDDING_MODEL)
 
 # === Init Chroma ===
-client = chromadb.Client()
+import chromadb.config
+
+chroma_client_settings = chromadb.config.Settings(
+    chroma_api_impl="rest",
+    chroma_server_host="chromadb.chromadb.svc.cluster.local",
+    chroma_server_http_port=8000,
+)
+
+client = chromadb.Client(chroma_client_settings)
+
 collection = client.get_or_create_collection(CHROMA_COLLECTION)
 
 # === System Prompt ===
