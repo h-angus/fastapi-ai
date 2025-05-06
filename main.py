@@ -12,7 +12,7 @@ app = FastAPI()
 OLLAMA_HOST = os.environ.get("OLLAMA_HOST", "http://ollama:11434")
 EMBEDDING_MODEL = "all-MiniLM-L6-v2"
 CHROMA_COLLECTION = "chat-mistral"
-CHROMA_HOST = "http://chromadb:8000"
+CHROMA_HOST = "http://chromadb.chromadb.svc.cluster.local:8000"
 
 # === Init embedding model and Chroma ===
 embedder = SentenceTransformer(EMBEDDING_MODEL)
@@ -28,6 +28,16 @@ async def get_models():
         {"model": "chat-mistral", "modelfile": "", "details": {}},
         {"model": "ha-mistral", "modelfile": "", "details": {}}
     ]
+
+@app.get("/api/models")
+async def get_all_models():
+   return {
+      "models": [
+         {"name": "chat-mistral", "modified_at": "", "parameters": {}},
+         {"name": "ha-mistral", "modified_at": "", "parameters": {}}
+      ]
+   }
+
 
 # === Chat endpoint ===
 class GenerateRequest(BaseModel):
