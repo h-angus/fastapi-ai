@@ -9,8 +9,9 @@ WORKDIR /app
 # Install deps first – this layer will be cached if requirements.txt is unchanged
 COPY requirements.txt .
 RUN apt-get update && apt-get install -y --no-install-recommends build-essential git \
+ && pip install --upgrade pip setuptools wheel \
+ && pip install --no-cache-dir "huggingface_hub[hf_xet]" \
  && pip install --no-cache-dir -r requirements.txt \
- && python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('all-MiniLM-L6-v2')" \
  && apt-get remove -y build-essential git && apt-get autoremove -y && apt-get clean \
  && rm -rf /var/lib/apt/lists/* /root/.cache/pip
 
