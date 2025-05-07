@@ -4,7 +4,7 @@ from pydantic import BaseModel
 from typing import Optional, List
 import requests
 import os
-import hashlib
+from hashlib import sha256
 from chromadb import HttpClient
 
 app = FastAPI()
