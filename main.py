@@ -154,6 +154,9 @@ async def chat_with_memory(request: Request):
    body = await request.json()
    model = body.get("model", "chat-mistral:latest")
    messages = body.get("messages", [])
+   print(f"💬 Model: {model}")
+   print(f"📨 Incoming messages: {[m['content'] for m in messages if m['role'] == 'user']}")
+
 
    if not messages or not isinstance(messages, list):
       return {"error": "Missing or invalid 'messages' field."}
@@ -165,6 +168,7 @@ async def chat_with_memory(request: Request):
 
    try:
       embedding_list = get_embeddings([latest_user_msg["content"]])
+      print(f"🧠 Embedding returned: {embedding_list}")
       if not embedding_list:
          raise ValueError("Empty embedding returned.")
       embedding = embedding_list[0]
@@ -178,6 +182,7 @@ async def chat_with_memory(request: Request):
          n_results=3,
          where={"user_id": user_id}
       )
+      print(f"🧾 Chroma memory results: {results}")
       memory_snippets = results.get("documents", [[]])[0]
    except Exception:
       memory_snippets = []
@@ -207,16 +212,22 @@ async def chat_with_memory(request: Request):
       return {"error": f"Ollama call failed: {str(e)}"}
 
    # Store long-term memory entry
+   # Store long-term memory entry
    try:
+      msg_hash = hashlib.sha256(latest_user_msg["content"].encode()).hexdigest()
+      doc_id = f"{user_id}_{msg_hash}"
+      print(f"🔁 Adding to Chroma: {doc_id}")
+      print(f"🧠 Content: {latest_user_msg['content']}")
+      print(f"📏 Embedding length: {len(embedding)}")
+
       collection.upsert(
          documents=[latest_user_msg["content"]],
          embeddings=[embedding],
          metadatas=[{"user_id": user_id}],
-         msg_hash = hashlib.sha256(latest_user_msg["content"].encode()).hexdigest(),
-         ids=[f"{user_id}_{msg_hash}"]
+         ids=[doc_id]
       )
-   except Exception:
-      pass
+   except Exception as e:
+      print(f"❌ Failed to store memory: {e}")
 
    return ollama_reply
 
