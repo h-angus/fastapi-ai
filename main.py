@@ -112,6 +112,14 @@ async def pull_model():
 async def delete_model():
    return {"status": "success"}
 
+@app.get("/inspect/chroma")
+async def inspect_chroma():
+   try:
+      collections = client.list_collections()
+      return {"collections": [c.name for c in collections]}
+   except Exception as e:
+      return {"error": str(e)}
+
 # === Chat endpoint ===
 class GenerateRequest(BaseModel):
    model: Optional[str] = "chat-mistral"
