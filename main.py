@@ -94,21 +94,10 @@ async def get_all_models():
       ]
    }
 
-@app.get("/ollama/api/version")
-async def get_ollama_version():
-   print("🔥 /ollama/api/version endpoint was hit")
-   return {
-      "models": [
-         {
-            "name": "chat-mistral",
-            "version": "0.1.31"
-         },
-         {
-            "name": "ha-mistral",
-            "version": "0.1.31"
-         }
-      ]
-   }
+@app.get("/api/version")
+async def real_ollama_version():
+   print("🔥 /api/version was hit")
+   return {"version": "0.1.31"}
 
 
 @app.get("/api/show")
