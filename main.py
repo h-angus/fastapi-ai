@@ -200,19 +200,7 @@ async def chat_with_memory(request: Request):
       insert_idx = sys_idx + 1 if sys_idx != -1 else 0
       messages.insert(insert_idx, memory_msg)
 
-   # Proxy to Ollama’s /api/chat
-   try:
-      response = requests.post(
-         f"{OLLAMA_HOST}/api/chat",
-         json={"model": model, "messages": messages, "stream": False}
-      )
-      response.raise_for_status()
-      ollama_reply = response.json()
-   except Exception as e:
-      return {"error": f"Ollama call failed: {str(e)}"}
-
-   # Store long-term memory entry
-   # Store long-term memory entry
+      # Store long-term memory entry
    try:
       msg_hash = hashlib.sha256(latest_user_msg["content"].encode()).hexdigest()
       doc_id = f"{user_id}_{msg_hash}"
@@ -228,6 +216,18 @@ async def chat_with_memory(request: Request):
       )
    except Exception as e:
       print(f"❌ Failed to store memory: {e}")
+
+   # Proxy to Ollama’s /api/chat
+   try:
+      response = requests.post(
+         f"{OLLAMA_HOST}/api/chat",
+         json={"model": model, "messages": messages, "stream": False}
+      )
+      response.raise_for_status()
+      ollama_reply = response.json()
+   except Exception as e:
+      return {"error": f"Ollama call failed: {str(e)}"}
+
 
    return ollama_reply
 
