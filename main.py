@@ -137,23 +137,30 @@ def get_embeddings(texts: List[str]) -> List[List[float]]:
       print(f"Embedding service error: {e}")
       return []
 
-@app.post("/api/generate")
-async def generate(data: GenerateRequest):
+@app.post("/api/chat")
+async def chat_with_memory(request: Request):
    user_id = "webui"
+   body = await request.json()
+   model = body.get("model", "chat-mistral:latest")
+   messages = body.get("messages", [])
 
-   if not data.prompt or not data.prompt.strip():
-      return {"error": "Prompt cannot be empty."}
+   if not messages or not isinstance(messages, list):
+      return {"error": "Missing or invalid 'messages' field."}
 
-   # Embed prompt
+   # Get latest user message (to embed)
+   latest_user_msg = next((m for m in reversed(messages) if m["role"] == "user"), None)
+   if not latest_user_msg:
+      return {"error": "No user message found."}
+
    try:
-      embedding_list = get_embeddings([data.prompt])
+      embedding_list = get_embeddings([latest_user_msg["content"]])
       if not embedding_list:
          raise ValueError("Empty embedding returned.")
       embedding = embedding_list[0]
    except Exception as e:
       return {"error": f"Embedding failed: {str(e)}"}
 
-   # Query memory
+   # Query ChromaDB
    try:
       results = collection.query(
          query_embeddings=[embedding],
@@ -164,41 +171,40 @@ async def generate(data: GenerateRequest):
    except Exception:
       memory_snippets = []
 
-   memory_block = "\n".join(f"- {m}" for m in memory_snippets)
+   # Format memory as a system message
+   if memory_snippets:
+      memory_block = "\n".join(f"- {m}" for m in memory_snippets)
+      memory_msg = {
+         "role": "system",
+         "content": f"Relevant past entries:\n{memory_block}"
+      }
 
-   full_prompt = f"""
-{SYSTEM_PROMPT}
+      # Inject memory after system prompt (if exists), or at the top
+      sys_idx = next((i for i, m in enumerate(messages) if m["role"] == "system"), -1)
+      insert_idx = sys_idx + 1 if sys_idx != -1 else 0
+      messages.insert(insert_idx, memory_msg)
 
-Relevant past entries:
-{memory_block}
-
-Current message:
-{data.prompt}
-"""
-
-   # Call Ollama (or mimic)
+   # Proxy to Ollama’s /api/chat
    try:
       response = requests.post(
-         f"{OLLAMA_HOST}/api/generate",
-         json={"model": data.model, "prompt": full_prompt, "stream": False}
+         f"{OLLAMA_HOST}/api/chat",
+         json={"model": model, "messages": messages, "stream": False}
       )
       response.raise_for_status()
-      response_text = response.json().get("response", "No response returned.")
+      ollama_reply = response.json()
    except Exception as e:
       return {"error": f"Ollama call failed: {str(e)}"}
 
-   # Store interaction
+   # Store long-term memory entry
    try:
       collection.add(
-         documents=[data.prompt],
+         documents=[latest_user_msg["content"]],
          embeddings=[embedding],
          metadatas=[{"user_id": user_id}],
-         ids=[f"{user_id}_{hash(data.prompt)}"]
+         ids=[f"{user_id}_{hash(latest_user_msg['content'])}"]
       )
    except Exception:
       pass
 
-   return {
-      "response": response_text,
-      "done": True
-   }
+   return ollama_reply
+
