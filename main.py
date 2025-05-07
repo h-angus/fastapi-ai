@@ -4,6 +4,7 @@ from pydantic import BaseModel
 from typing import Optional, List
 import requests
 import os
+import hashlib
 from chromadb import HttpClient
 
 app = FastAPI()
@@ -120,6 +121,19 @@ async def inspect_chroma():
    except Exception as e:
       return {"error": str(e)}
 
+@app.get("/inspect/chroma/docs")
+async def inspect_chroma_docs():
+   try:
+      docs = collection.get()
+      return {
+         "ids": docs.get("ids", []),
+         "documents": docs.get("documents", []),
+         "metadatas": docs.get("metadatas", [])
+      }
+   except Exception as e:
+      return {"error": str(e)}
+
+
 # === Chat endpoint ===
 class GenerateRequest(BaseModel):
    model: Optional[str] = "chat-mistral"
@@ -194,11 +208,12 @@ async def chat_with_memory(request: Request):
 
    # Store long-term memory entry
    try:
-      collection.add(
+      collection.upsert(
          documents=[latest_user_msg["content"]],
          embeddings=[embedding],
          metadatas=[{"user_id": user_id}],
-         ids=[f"{user_id}_{hash(latest_user_msg['content'])}"]
+         msg_hash = hashlib.sha256(latest_user_msg["content"].encode()).hexdigest(),
+         ids=[f"{user_id}_{msg_hash}"]
       )
    except Exception:
       pass
