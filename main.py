@@ -78,7 +78,7 @@ async def get_all_models():
          {
             "name": "chat-mistral",
             "model": "chat-mistral",
-            "version": "0.1.31",  # ✅ Required
+            "version": "0.1.31",
             "modified_at": "2024-01-01T00:00:00.000Z",
             "parameters": {},
             "template": ""
@@ -86,10 +86,26 @@ async def get_all_models():
          {
             "name": "ha-mistral",
             "model": "ha-mistral",
-            "version": "0.1.31",  # ✅ Required
+            "version": "0.1.31",
             "modified_at": "2024-01-01T00:00:00.000Z",
             "parameters": {},
             "template": ""
+         }
+      ]
+   }
+
+@app.get("/ollama/api/version")
+async def get_ollama_version():
+   print("🔥 /ollama/api/version endpoint was hit")
+   return {
+      "models": [
+         {
+            "name": "chat-mistral",
+            "version": "0.1.31"
+         },
+         {
+            "name": "ha-mistral",
+            "version": "0.1.31"
          }
       ]
    }
@@ -106,15 +122,6 @@ async def pull_model():
 @app.post("/api/delete")
 async def delete_model():
    return {"status": "success"}
-
-@app.get("/ollama/api/version")
-async def get_ollama_version():
-   return {
-      "models": [
-         { "version": "0.1.31" },
-         { "version": "0.1.30" }  # You can use one or multiple
-      ]
-   }
 
 # === Chat endpoint ===
 class GenerateRequest(BaseModel):
