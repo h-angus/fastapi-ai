@@ -207,7 +207,7 @@ async def chat_with_memory(request: Request):
       
          for doc, dist in zip(results.get("documents", [[]])[0], results.get("distances", [[]])[0]):
             print(f"📏 Distance: {dist:.4f} — Doc: {doc[:60]}...")
-            if dist < 0.3:  # Only include relevant results
+            if dist < 0.5:  # Only include relevant results
                memory_snippets.append(doc)
       
       except Exception as e:
