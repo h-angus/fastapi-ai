@@ -133,6 +133,17 @@ async def inspect_chroma_docs():
    except Exception as e:
       return {"error": str(e)}
 
+@app.get("/api/clear_memory")
+async def clear_user_memory_get():
+   user_id = "webui"
+   try:
+      deleted_ids = collection.delete(where={"user_id": user_id})
+      print(f"🗑️ Cleared memory for user_id '{user_id}': {deleted_ids}")
+      return {"status": "success", "deleted_ids": deleted_ids}
+   except Exception as e:
+      print(f"❌ Failed to clear memory: {e}")
+      return {"status": "error", "detail": str(e)}
+
 
 # === Chat endpoint ===
 class GenerateRequest(BaseModel):
@@ -147,17 +158,6 @@ def get_embeddings(texts: List[str]) -> List[List[float]]:
    except Exception as e:
       print(f"Embedding service error: {e}")
       return []
-
-@app.post("/api/clear_memory")
-async def clear_user_memory():
-   user_id = "webui"
-   try:
-      deleted_ids = collection.delete(where={"user_id": user_id})
-      print(f"🗑️ Cleared memory for user_id '{user_id}': {deleted_ids}")
-      return {"status": "success", "deleted_ids": deleted_ids}
-   except Exception as e:
-      print(f"❌ Failed to clear memory: {e}")
-      return {"status": "error", "detail": str(e)}
 
 @app.post("/api/chat")
 async def chat_with_memory(request: Request):
