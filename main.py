@@ -148,76 +148,76 @@ def get_embeddings(texts: List[str]) -> List[List[float]]:
       print(f"Embedding service error: {e}")
       return []
 
+@app.post("/api/clear_memory")
+async def clear_user_memory():
+   user_id = "webui"
+   try:
+      deleted_ids = collection.delete(where={"user_id": user_id})
+      print(f"🗑️ Cleared memory for user_id '{user_id}': {deleted_ids}")
+      return {"status": "success", "deleted_ids": deleted_ids}
+   except Exception as e:
+      print(f"❌ Failed to clear memory: {e}")
+      return {"status": "error", "detail": str(e)}
+
 @app.post("/api/chat")
 async def chat_with_memory(request: Request):
    user_id = "webui"
    body = await request.json()
    model = body.get("model", "chat-mistral:latest")
    messages = body.get("messages", [])
+
    print(f"💬 Model: {model}")
    print(f"📨 Incoming messages: {[m['content'] for m in messages if m['role'] == 'user']}")
-
 
    if not messages or not isinstance(messages, list):
       return {"error": "Missing or invalid 'messages' field."}
 
-   # Get latest user message (to embed)
+   # Get latest user message
    latest_user_msg = next((m for m in reversed(messages) if m["role"] == "user"), None)
    if not latest_user_msg:
       return {"error": "No user message found."}
 
-   try:
-      embedding_list = get_embeddings([latest_user_msg["content"]])
-      print(f"🧠 Embedding returned: {embedding_list}")
-      if not embedding_list:
-         raise ValueError("Empty embedding returned.")
-      embedding = embedding_list[0]
-   except Exception as e:
-      return {"error": f"Embedding failed: {str(e)}"}
+   # Check if it's a metadata prompt (Open WebUI special prompt)
+   is_metadata_prompt = (
+      latest_user_msg["content"].startswith("### Task:") or
+      "<chat_history>" in latest_user_msg["content"]
+   )
 
-   # Query ChromaDB
-   try:
-      results = collection.query(
-         query_embeddings=[embedding],
-         n_results=3,
-         where={"user_id": user_id}
-      )
-      print(f"🧾 Chroma memory results: {results}")
-      memory_snippets = results.get("documents", [[]])[0]
-   except Exception:
-      memory_snippets = []
+   # === Memory embedding & retrieval only for real chats ===
+   if not is_metadata_prompt:
+      try:
+         embedding_list = get_embeddings([latest_user_msg["content"]])
+         print(f"🧠 Embedding returned: {embedding_list}")
+         if not embedding_list:
+            raise ValueError("Empty embedding returned.")
+         embedding = embedding_list[0]
+      except Exception as e:
+         return {"error": f"Embedding failed: {str(e)}"}
 
-   # Format memory as a system message
-   if memory_snippets:
-      memory_block = "\n".join(f"- {m}" for m in memory_snippets)
-      memory_msg = {
-         "role": "system",
-         "content": f"Relevant past entries:\n{memory_block}"
-      }
+      # Query ChromaDB
+      try:
+         results = collection.query(
+            query_embeddings=[embedding],
+            n_results=3,
+            where={"user_id": user_id}
+         )
+         print(f"🧾 Chroma memory results: {results}")
+         memory_snippets = results.get("documents", [[]])[0]
+      except Exception:
+         memory_snippets = []
 
-      # Inject memory after system prompt (if exists), or at the top
-      sys_idx = next((i for i, m in enumerate(messages) if m["role"] == "system"), -1)
-      insert_idx = sys_idx + 1 if sys_idx != -1 else 0
-      messages.insert(insert_idx, memory_msg)
+      # Inject memory
+      if memory_snippets:
+         memory_block = "\n".join(f"- {m}" for m in memory_snippets)
+         memory_msg = {
+            "role": "system",
+            "content": f"Relevant past entries:\n{memory_block}"
+         }
+         sys_idx = next((i for i, m in enumerate(messages) if m["role"] == "system"), -1)
+         insert_idx = sys_idx + 1 if sys_idx != -1 else 0
+         messages.insert(insert_idx, memory_msg)
 
-      # Store long-term memory entry
-   try:
-      msg_hash = hashlib.sha256(latest_user_msg["content"].encode()).hexdigest()
-      doc_id = f"{user_id}_{msg_hash}"
-      print(f"🔁 Adding to Chroma: {doc_id}")
-      print(f"🧠 Content: {latest_user_msg['content']}")
-      print(f"📏 Embedding length: {len(embedding)}")
-
-      collection.upsert(
-         documents=[latest_user_msg["content"]],
-         embeddings=[embedding],
-         metadatas=[{"user_id": user_id}],
-         ids=[doc_id]
-      )
-   except Exception as e:
-      print(f"❌ Failed to store memory: {e}")
-
-   # Proxy to Ollama’s /api/chat
+   # === Send to Ollama ===
    try:
       response = requests.post(
          f"{OLLAMA_HOST}/api/chat",
@@ -228,6 +228,26 @@ async def chat_with_memory(request: Request):
    except Exception as e:
       return {"error": f"Ollama call failed: {str(e)}"}
 
+   # === Store only if not metadata ===
+   if not is_metadata_prompt:
+      try:
+         msg_hash = sha256(latest_user_msg["content"].encode()).hexdigest()
+         doc_id = f"{user_id}_{msg_hash}"
+         print(f"🔁 Adding to Chroma: {doc_id}")
+         print(f"🧠 Content: {latest_user_msg['content']}")
+         print(f"📏 Embedding length: {len(embedding)}")
+
+         collection.upsert(
+            documents=[latest_user_msg["content"]],
+            embeddings=[embedding],
+            metadatas=[{"user_id": user_id}],
+            ids=[doc_id]
+         )
+      except Exception as e:
+         print(f"❌ Failed to store memory: {e}")
+   else:
+      print("⚠️ Skipping Chroma (metadata prompt)")
 
    return ollama_reply
+
 
