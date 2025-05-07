@@ -1,5 +1,5 @@
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, Query
 from pydantic import BaseModel
 from typing import Optional, List
 import requests
@@ -134,8 +134,7 @@ async def inspect_chroma_docs():
       return {"error": str(e)}
 
 @app.get("/api/clear_memory")
-async def clear_user_memory_get():
-   user_id = "webui"
+async def clear_user_memory_get(user_id: str = Query("webui")):
    try:
       deleted_ids = collection.delete(where={"user_id": user_id})
       print(f"🗑️ Cleared memory for user_id '{user_id}': {deleted_ids}")
@@ -161,8 +160,8 @@ def get_embeddings(texts: List[str]) -> List[List[float]]:
 
 @app.post("/api/chat")
 async def chat_with_memory(request: Request):
-   user_id = "webui"
    body = await request.json()
+   user_id = body.get("user_id", "webui")  # ← now dynamic
    model = body.get("model", "chat-mistral:latest")
    messages = body.get("messages", [])
 
@@ -259,4 +258,67 @@ async def chat_with_memory(request: Request):
 
    return ollama_reply
 
+class HARequest(BaseModel):
+   prompt: str
+   user_id: Optional[str] = "home-assistant"
+
+
+
+# HA CODE:
+
+@app.post("/api/generate")
+async def ha_generate(req: HARequest):
+   prompt = req.prompt
+   user_id = req.user_id
+
+   # === Embed prompt
+   embedding_list = get_embeddings([prompt])
+   if not embedding_list:
+      return {"response": "Embedding failed."}
+   embedding = embedding_list[0]
+
+   # === Retrieve memory
+   try:
+      results = collection.query(
+         query_embeddings=[embedding],
+         n_results=5,
+         where={"user_id": user_id},
+         include=["documents", "distances"]
+      )
+      memory_snippets = [
+         doc for doc, dist in zip(results.get("documents", [[]])[0], results.get("distances", [[]])[0])
+         if dist < 0.5
+      ]
+   except Exception as e:
+      memory_snippets = []
+      print(f"Chroma query failed: {e}")
+
+   memory_block = "\n".join(memory_snippets)
+   full_prompt = f"{SYSTEM_PROMPT}\n\n"
+   if memory_block:
+      full_prompt += f"Relevant memory:\n{memory_block}\n\n"
+   full_prompt += f"User: {prompt}"
+
+   # === Generate reply
+   try:
+      response = requests.post(f"{OLLAMA_HOST}/api/generate", json={"prompt": full_prompt})
+      response.raise_for_status()
+      ollama_reply = response.json().get("response", "No response.")
+   except Exception as e:
+      return {"response": f"Ollama error: {str(e)}"}
+
+   # === Store memory
+   try:
+      msg_hash = sha256(prompt.encode()).hexdigest()
+      doc_id = f"{user_id}_{msg_hash}"
+      collection.upsert(
+         documents=[prompt],
+         embeddings=[embedding],
+         metadatas=[{"user_id": user_id}],
+         ids=[doc_id]
+      )
+   except Exception as e:
+      print(f"Failed to store memory: {e}")
+
+   return {"response": ollama_reply}
 
