@@ -194,40 +194,38 @@ async def chat_with_memory(request: Request):
       except Exception as e:
          return {"error": f"Embedding failed: {str(e)}"}
 
-      # Query ChromaDB
+      # Query ChromaDB with similarity + distance filtering
       try:
          results = collection.query(
             query_embeddings=[embedding],
-            n_results=3,
-            where={"user_id": user_id}
+            n_results=10,  # you can raise this to get more to filter from
+            where={"user_id": user_id},
+            include=["documents", "distances"]
          )
-         print(f"🧾 Chroma memory results: {results}")
-         memory_snippets = results.get("documents", [[]])[0]
-      except Exception:
+         print(f"🧾 Raw Chroma results: {results}")
          memory_snippets = []
-
+      
+         for doc, dist in zip(results.get("documents", [[]])[0], results.get("distances", [[]])[0]):
+            print(f"📏 Distance: {dist:.4f} — Doc: {doc[:60]}...")
+            if dist < 0.3:  # Only include relevant results
+               memory_snippets.append(doc)
+      
+      except Exception as e:
+         print(f"❌ Chroma query failed: {e}")
+         memory_snippets = []
+      
       # Inject memory
       if memory_snippets:
          memory_block = "\n".join(f"- {m}" for m in memory_snippets)
          memory_msg = {
             "role": "system",
-            "content": f"Relevant past entries:\n{memory_block}"
+            "content": f"Relevant past entries:\n{memo_block}"
          }
          sys_idx = next((i for i, m in enumerate(messages) if m["role"] == "system"), -1)
          insert_idx = sys_idx + 1 if sys_idx != -1 else 0
          messages.insert(insert_idx, memory_msg)
 
-   # === Send to Ollama ===
-   try:
-      response = requests.post(
-         f"{OLLAMA_HOST}/api/chat",
-         json={"model": model, "messages": messages, "stream": False}
-      )
-      response.raise_for_status()
-      ollama_reply = response.json()
-   except Exception as e:
-      return {"error": f"Ollama call failed: {str(e)}"}
-
+   
    # === Store only if not metadata ===
    if not is_metadata_prompt:
       try:
@@ -247,6 +245,17 @@ async def chat_with_memory(request: Request):
          print(f"❌ Failed to store memory: {e}")
    else:
       print("⚠️ Skipping Chroma (metadata prompt)")
+
+   # === Send to Ollama ===
+   try:
+      response = requests.post(
+         f"{OLLAMA_HOST}/api/chat",
+         json={"model": model, "messages": messages, "stream": False}
+      )
+      response.raise_for_status()
+      ollama_reply = response.json()
+   except Exception as e:
+      return {"error": f"Ollama call failed: {str(e)}"}
 
    return ollama_reply
 
