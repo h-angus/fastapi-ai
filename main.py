@@ -219,7 +219,7 @@ async def chat_with_memory(request: Request):
          memory_block = "\n".join(f"- {m}" for m in memory_snippets)
          memory_msg = {
             "role": "system",
-            "content": f"Relevant past entries:\n{memo_block}"
+            "content": f"Relevant past entries:\n{memory_block}"
          }
          sys_idx = next((i for i, m in enumerate(messages) if m["role"] == "system"), -1)
          insert_idx = sys_idx + 1 if sys_idx != -1 else 0
