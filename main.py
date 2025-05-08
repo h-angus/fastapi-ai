@@ -6,6 +6,7 @@ import requests
 import os
 from hashlib import sha256
 from chromadb import HttpClient
+import re
 
 app = FastAPI()
 
@@ -275,9 +276,19 @@ async def ha_generate(req: HARequest):
    print(f"[INFO] ➤ Prompt received: {prompt}")
    print(f"[INFO] ➤ User ID: {user_id}")
 
-   # === Extract clean user instruction
-   user_prompt_clean = prompt.strip().split("[/INST]")[-1].strip()
-   print(f"[INFO] 🧼 Cleaned user prompt: {user_prompt_clean}")
+   # === Extract clean user instruction for memory only
+   user_prompt_clean = ""
+   match = re.search(r"User instruction:(.*)\[/INST\]", prompt, re.DOTALL)
+   if match:
+      user_prompt_clean = match.group(1).strip()
+      print(f"[INFO] 🧼 Cleaned user prompt extracted: {user_prompt_clean}")
+   else:
+      print("[WARN] Could not extract user prompt. Falling back to full prompt.")
+      user_prompt_clean = prompt.strip()
+
+   if not user_prompt_clean:
+      print("[ERROR] Cleaned user prompt is empty. Aborting.")
+      return {"response": "Prompt parsing failed — no usable user input found."}
 
    # === Embed clean prompt
    try:
@@ -307,7 +318,7 @@ async def ha_generate(req: HARequest):
       print(f"[ERROR] ✖ Chroma query failed: {e}")
       memory_snippets = []
 
-   # === Prepare chat messages
+   # === Prepare full prompt messages for Ollama
    messages = [{"role": "system", "content": SYSTEM_PROMPT}]
    if memory_snippets:
       memory_block = "\n".join(f"- {m}" for m in memory_snippets)
@@ -315,7 +326,7 @@ async def ha_generate(req: HARequest):
          "role": "system",
          "content": f"Relevant past entries:\n{memory_block}"
       })
-   messages.append({"role": "user", "content": user_prompt_clean})
+   messages.append({"role": "user", "content": prompt})  # ← full prompt sent to Ollama
 
    # === Store clean prompt in memory
    try:
@@ -331,12 +342,12 @@ async def ha_generate(req: HARequest):
    except Exception as e:
       print(f"[ERROR] ✖ Failed to store memory: {e}")
 
-   # === Send to Ollama
+   # === Send full message block to Ollama
    try:
       response = requests.post(
          f"{OLLAMA_HOST}/api/chat",
          json={
-            "model": "ha-mistral",  # ← Update this if needed
+            "model": "ha-mistral",  # or your preferred model name
             "messages": messages,
             "stream": False
          }
@@ -348,11 +359,11 @@ async def ha_generate(req: HARequest):
       print(f"[ERROR] ✖ Ollama call failed: {e}")
       return {"response": f"Ollama error: {str(e)}"}
 
-   
    print("[DEBUG] Ollama raw reply:")
    print(ollama_reply)
 
    return ollama_reply
+
 
 
 
