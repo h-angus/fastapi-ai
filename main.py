@@ -271,22 +271,23 @@ async def ha_generate(req: HARequest):
    print("[INFO] ➤ Received /api/generate request")
 
    prompt = req.prompt
-   user_id = req.user_id
+   user_id = req.user_id or "home-assistant"
    print(f"[INFO] ➤ Prompt received: {prompt}")
    print(f"[INFO] ➤ User ID: {user_id}")
 
    # === Embed prompt
-   print("[INFO] ➤ Generating embeddings...")
-   embedding_list = get_embeddings([prompt])
-   if not embedding_list:
-      print("[ERROR] ✖ Embedding failed!")
-      return {"response": "Embedding failed."}
-   embedding = embedding_list[0]
-   print("[INFO] ✅ Embedding successful")
+   try:
+      embedding_list = get_embeddings([prompt])
+      if not embedding_list:
+         raise ValueError("Empty embedding returned.")
+      embedding = embedding_list[0]
+      print("[INFO] ✅ Embedding successful")
+   except Exception as e:
+      print(f"[ERROR] ✖ Embedding failed: {e}")
+      return {"response": f"Embedding failed: {str(e)}"}
 
    # === Retrieve memory
    try:
-      print("[INFO] ➤ Querying ChromaDB for memory...")
       results = collection.query(
          query_embeddings=[embedding],
          n_results=5,
@@ -297,32 +298,23 @@ async def ha_generate(req: HARequest):
          doc for doc, dist in zip(results.get("documents", [[]])[0], results.get("distances", [[]])[0])
          if dist < 0.5
       ]
-      print(f"[INFO] ✅ Retrieved {len(memory_snippets)} relevant memory snippets")
+      print(f"[INFO] ✅ Retrieved {len(memory_snippets)} memory snippets")
    except Exception as e:
-      memory_snippets = []
       print(f"[ERROR] ✖ Chroma query failed: {e}")
+      memory_snippets = []
 
-   memory_block = "\n".join(memory_snippets)
-   full_prompt = f"{SYSTEM_PROMPT}\n\n"
-   if memory_block:
-      full_prompt += f"Relevant memory:\n{memory_block}\n\n"
-   full_prompt += f"User: {prompt}"
-   print("[INFO] ➤ Final prompt to Ollama prepared")
-
-   # === Generate reply
-   try:
-      print("[INFO] ➤ Sending prompt to Ollama...")
-      response = requests.post(f"{OLLAMA_HOST}/api/generate", json={"prompt": full_prompt})
-      response.raise_for_status()
-      ollama_reply = response.json().get("response", "No response.")
-      print("[INFO] ✅ Ollama replied successfully")
-   except Exception as e:
-      print(f"[ERROR] ✖ Ollama call failed: {e}")
-      return {"response": f"Ollama error: {str(e)}"}
+   # === Prepare chat messages
+   messages = [{"role": "system", "content": SYSTEM_PROMPT}]
+   if memory_snippets:
+      memory_block = "\n".join(f"- {m}" for m in memory_snippets)
+      messages.append({
+         "role": "system",
+         "content": f"Relevant past entries:\n{memory_block}"
+      })
+   messages.append({"role": "user", "content": prompt})
 
    # === Store memory
    try:
-      print("[INFO] ➤ Storing memory in ChromaDB...")
       msg_hash = sha256(prompt.encode()).hexdigest()
       doc_id = f"{user_id}_{msg_hash}"
       collection.upsert(
@@ -331,10 +323,27 @@ async def ha_generate(req: HARequest):
          metadatas=[{"user_id": user_id}],
          ids=[doc_id]
       )
-      print("[INFO] ✅ Memory stored")
+      print("[INFO] ✅ Stored memory to ChromaDB")
    except Exception as e:
       print(f"[ERROR] ✖ Failed to store memory: {e}")
 
-   return {"response": ollama_reply}
+   # === Send to Ollama
+   try:
+      response = requests.post(
+         f"{OLLAMA_HOST}/api/chat",
+         json={
+            "model": "ha-mistral",  # ← Update to match your model name
+            "messages": messages,
+            "stream": False
+         }
+      )
+      response.raise_for_status()
+      ollama_reply = response.json()
+      print("[INFO] ✅ Ollama replied successfully")
+   except Exception as e:
+      print(f"[ERROR] ✖ Ollama call failed: {e}")
+      return {"response": f"Ollama error: {str(e)}"}
+
+   return ollama_reply
 
 
