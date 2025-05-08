@@ -275,9 +275,13 @@ async def ha_generate(req: HARequest):
    print(f"[INFO] ➤ Prompt received: {prompt}")
    print(f"[INFO] ➤ User ID: {user_id}")
 
-   # === Embed prompt
+   # === Extract clean user instruction
+   user_prompt_clean = prompt.strip().split("[/INST]")[-1].strip()
+   print(f"[INFO] 🧼 Cleaned user prompt: {user_prompt_clean}")
+
+   # === Embed clean prompt
    try:
-      embedding_list = get_embeddings([prompt])
+      embedding_list = get_embeddings([user_prompt_clean])
       if not embedding_list:
          raise ValueError("Empty embedding returned.")
       embedding = embedding_list[0]
@@ -311,14 +315,14 @@ async def ha_generate(req: HARequest):
          "role": "system",
          "content": f"Relevant past entries:\n{memory_block}"
       })
-   messages.append({"role": "user", "content": prompt})
+   messages.append({"role": "user", "content": user_prompt_clean})
 
-   # === Store memory
+   # === Store clean prompt in memory
    try:
-      msg_hash = sha256(prompt.encode()).hexdigest()
+      msg_hash = sha256(user_prompt_clean.encode()).hexdigest()
       doc_id = f"{user_id}_{msg_hash}"
       collection.upsert(
-         documents=[prompt],
+         documents=[user_prompt_clean],
          embeddings=[embedding],
          metadatas=[{"user_id": user_id}],
          ids=[doc_id]
@@ -332,7 +336,7 @@ async def ha_generate(req: HARequest):
       response = requests.post(
          f"{OLLAMA_HOST}/api/chat",
          json={
-            "model": "ha-mistral",  # ← Update to match your model name
+            "model": "ha-mistral",  # ← Update this if needed
             "messages": messages,
             "stream": False
          }
@@ -345,5 +349,6 @@ async def ha_generate(req: HARequest):
       return {"response": f"Ollama error: {str(e)}"}
 
    return ollama_reply
+
 
 
