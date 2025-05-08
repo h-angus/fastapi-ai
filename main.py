@@ -348,6 +348,10 @@ async def ha_generate(req: HARequest):
       print(f"[ERROR] ✖ Ollama call failed: {e}")
       return {"response": f"Ollama error: {str(e)}"}
 
+   
+   print("[DEBUG] Ollama raw reply:")
+   print(ollama_reply)
+
    return ollama_reply
 
 
